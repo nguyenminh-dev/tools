@@ -236,40 +236,13 @@ ipcMain.handle("get-vm-path", async () => {
 });
 
 // Create new VM
+// Create new VM
 ipcMain.handle("create-vm", async (_, vmConfig) => {
   const { name, memoryGB, cpuCount, diskSizeGB, isoPath, switchName, enableTPM, dynamicMemory, enhancedSession } = vmConfig;
 
   try {
-    // === CHECK LIMITS ===
 
-    // 1. Check per-VM limits
-    if (memoryGB > config.limits.perVM.maxMemoryGB) {
-      return { success: false, error: `Memory exceeds per-VM limit (${config.limits.perVM.maxMemoryGB}GB)` };
-    }
-    if (cpuCount > config.limits.perVM.maxCPU) {
-      return { success: false, error: `CPU exceeds per-VM limit (${config.limits.perVM.maxCPU} cores)` };
-    }
-    if (diskSizeGB > config.limits.perVM.maxDiskGB) {
-      return { success: false, error: `Disk exceeds per-VM limit (${config.limits.perVM.maxDiskGB}GB)` };
-    }
-
-    // 2. Check total VM count
-    const used = await getTotalUsedResources();
-    if (used.TotalCount >= config.limits.maxVMs) {
-      return { success: false, error: `Maximum VM count reached (${config.limits.maxVMs})` };
-    }
-
-    // 3. Check total resources (include new VM)
-    const newTotalCPU = used.CPU + cpuCount;
-    const newTotalMem = used.MemoryGB + memoryGB;
-    if (newTotalCPU > config.limits.total.maxCPU) {
-      return { success: false, error: `Total CPU would exceed limit (${config.limits.total.maxCPU} cores). Currently using: ${used.CPU}` };
-    }
-    if (newTotalMem > config.limits.total.maxMemoryGB) {
-      return { success: false, error: `Total Memory would exceed limit (${config.limits.total.maxMemoryGB}GB). Currently using: ${used.MemoryGB}GB` };
-    }
-
-    // Create VM with VHD
+    // ===== CREATE VM =====
     const vmPath = path.join(__dirname, "vms", name);
     const vhdPath = path.join(vmPath, `${name}.vhdx`);
     if (!fs.existsSync(vmPath)) fs.mkdirSync(vmPath, { recursive: true });
@@ -278,42 +251,41 @@ ipcMain.handle("create-vm", async (_, vmConfig) => {
       `New-VM -Name "${name}" -MemoryStartupBytes ${memoryGB}GB -Generation 2 -NewVHDPath "${vhdPath}" -NewVHDSizeBytes ${diskSizeGB}GB -Path "${vmPath}" -SwitchName "${switchName}"`
     );
 
-    // Set CPU and Dynamic Memory
+    // ===== SET CPU =====
+    await execPowerShell(
+      `Set-VM -Name "${name}" -ProcessorCount ${cpuCount}`
+    );
+
+    // ===== SET MEMORY =====
     if (dynamicMemory) {
       await execPowerShell(
-        `Set-VM -Name "${name}" -ProcessorCount ${cpuCount} -DynamicMemory -MinimumBytes 512MB -MaximumBytes ${memoryGB * 2}GB`
+        `Set-VMMemory -VMName "${name}" -DynamicMemoryEnabled $true -MinimumBytes 512MB -StartupBytes ${memoryGB}GB -MaximumBytes ${memoryGB * 2}GB`
       );
     } else {
       await execPowerShell(
-        `Set-VM -Name "${name}" -ProcessorCount ${cpuCount} -StaticMemory`
+        `Set-VMMemory -VMName "${name}" -DynamicMemoryEnabled $false -StartupBytes ${memoryGB}GB`
       );
     }
 
-    // Enable TPM 2.0 (Required for Windows 11)
+    // ===== TPM =====
     if (enableTPM) {
       await execPowerShell(
-        `Set-VMKeyProtector -VMName "${name}" -NewLocalKeyProtector -ErrorAction SilentlyContinue`
+        `Set-VMKeyProtector -VMName "${name}" -NewLocalKeyProtector`
       );
       await execPowerShell(
-        `Enable-VMTPM -VMName "${name}" -ErrorAction SilentlyContinue`
+        `Enable-VMTPM -VMName "${name}"`
       );
     }
 
-    // Attach ISO if provided
+    // ===== ISO =====
     if (isoPath) {
       await execPowerShell(
-        `$vmDVD = Add-VMDvdDrive -VMName "${name}" -Path "${isoPath}" -ErrorAction Stop; Set-VMFirmware -VMName "${name}" -FirstBootDevice $vmDVD`
-      );
-    }
-
-    // Enable Enhanced Session Mode
-    if (enhancedSession) {
-      await execPowerShell(
-        `Set-VM -Name "${name}" -EnhancedSessionTransportType HvSocket`
+        `$dvd = Add-VMDvdDrive -VMName "${name}" -Path "${isoPath}"; Set-VMFirmware -VMName "${name}" -FirstBootDevice $dvd`
       );
     }
 
     return { success: true };
+
   } catch (error) {
     return { success: false, error: error.error || error.message };
   }
