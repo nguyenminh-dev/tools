@@ -96,9 +96,139 @@ button:hover:not(:disabled) {
 }
 
 .btn-refresh { background: #2563eb; color: white; }
+.btn-create { background: #059669; color: white; }
 .btn-start { background: #16a34a; color: white; }
 .btn-stop { background: #dc2626; color: white; }
 .btn-delete { background: #7f1d1d; color: white; }
+.btn-cancel { background: #6b7280; color: white; }
+.btn-submit { background: #059669; color: white; }
+
+/* ================= MODAL ================= */
+
+.modal-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-overlay.active {
+  display: flex;
+}
+
+.modal {
+  background: white;
+  border-radius: 12px;
+  padding: 30px;
+  width: 100%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+.modal h2 {
+  color: #0078d4;
+  margin-bottom: 20px;
+  font-size: 20px;
+}
+
+.form-group {
+  margin-bottom: 18px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: #444;
+}
+
+.form-group input,
+.form-group select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: #0078d4;
+  box-shadow: 0 0 0 3px rgba(0, 120, 212, 0.1);
+}
+
+.form-group input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+.form-group input::-webkit-outer-spin-button,
+.form-group input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.checkbox-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.checkbox-group input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+}
+
+.checkbox-group label {
+  margin: 0;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.form-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.error-message {
+  background: #fee2e2;
+  color: #dc2626;
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  margin-bottom: 16px;
+  display: none;
+}
+
+.error-message.show {
+  display: block;
+}
+
+.hint {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 4px;
+}
 
 /* ================= GRID ================= */
 
@@ -196,13 +326,89 @@ button:hover:not(:disabled) {
 
 <div class="toolbar">
   <button class="btn-refresh" onclick="loadVMs()">Refresh</button>
+  <button class="btn-create" onclick="openCreateVMModal()">+ Create VM</button>
 </div>
 
 <h2>Virtual Machines</h2>
 <div class="grid" id="vmGrid"></div>
 
+<!-- ================= CREATE VM MODAL ================= -->
+
+<div class="modal-overlay" id="createVMModal">
+  <div class="modal">
+    <h2>Create New Virtual Machine</h2>
+
+    <div class="error-message" id="createError"></div>
+
+    <form id="createVMForm" onsubmit="submitCreateVM(event)">
+      <div class="form-group">
+        <label for="vmName">VM Name *</label>
+        <input type="text" id="vmName" name="vmName" required placeholder="e.g., Ubuntu-Server" />
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="memoryGB">Memory (GB) *</label>
+          <input type="number" id="memoryGB" name="memoryGB" required min="1" max="128" value="4" />
+          <div class="hint">Max: <span id="maxMemoryHint">16</span> GB</div>
+        </div>
+
+        <div class="form-group">
+          <label for="cpuCount">CPU Cores *</label>
+          <input type="number" id="cpuCount" name="cpuCount" required min="1" max="16" value="2" />
+          <div class="hint">Max: <span id="maxCPUHint">8</span> cores</div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="diskSizeGB">Disk Size (GB) *</label>
+        <input type="number" id="diskSizeGB" name="diskSizeGB" required min="10" max="1000" value="60" />
+        <div class="hint">Max: <span id="maxDiskHint">500</span> GB</div>
+      </div>
+
+      <div class="form-group">
+        <label for="switchName">Virtual Switch *</label>
+        <select id="switchName" name="switchName" required>
+          <option value="">Loading switches...</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="isoPath">ISO File (Optional)</label>
+        <select id="isoPath" name="isoPath">
+          <option value="">No ISO (Empty VM)</option>
+          <option value="">Loading ISOs...</option>
+        </select>
+        <div class="hint">Place ISO files in the app folder</div>
+      </div>
+
+      <div class="checkbox-group">
+        <input type="checkbox" id="enableTPM" name="enableTPM" checked />
+        <label for="enableTPM">Enable TPM 2.0 (Required for Windows 11)</label>
+      </div>
+
+      <div class="checkbox-group">
+        <input type="checkbox" id="dynamicMemory" name="dynamicMemory" checked />
+        <label for="dynamicMemory">Enable Dynamic Memory</label>
+      </div>
+
+      <div class="checkbox-group">
+        <input type="checkbox" id="enhancedSession" name="enhancedSession" checked />
+        <label for="enhancedSession">Enable Enhanced Session Mode</label>
+      </div>
+
+      <div class="form-actions">
+        <button type="button" class="btn-cancel" onclick="closeCreateVMModal()">Cancel</button>
+        <button type="submit" class="btn-submit" id="submitBtn">Create VM</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script>
 let limits = null;
+let switches = [];
+let isos = [];
 
 function setBar(id, used, max) {
   const percent = max > 0 ? Math.min((used / max) * 100, 100) : 0;
@@ -284,6 +490,129 @@ async function deleteVM(name) {
   await window.api.deleteVM(name);
   loadVMs();
 }
+
+// ================= CREATE VM =================
+
+async function openCreateVMModal() {
+  const modal = document.getElementById("createVMModal");
+  const errorEl = document.getElementById("createError");
+
+  // Reset form
+  document.getElementById("createVMForm").reset();
+  errorEl.classList.remove("show");
+
+  // Update hints with limits
+  document.getElementById("maxMemoryHint").textContent = limits.limits.perVM.maxMemoryGB;
+  document.getElementById("maxCPUHint").textContent = limits.limits.perVM.maxCPU;
+  document.getElementById("maxDiskHint").textContent = limits.limits.perVM.maxDiskGB;
+
+  // Set max attributes
+  document.getElementById("memoryGB").max = limits.limits.perVM.maxMemoryGB;
+  document.getElementById("cpuCount").max = limits.limits.perVM.maxCPU;
+  document.getElementById("diskSizeGB").max = limits.limits.perVM.maxDiskGB;
+
+  try {
+    // Load switches
+    switches = await window.api.getSwitches();
+    const switchSelect = document.getElementById("switchName");
+
+    if (switches.length === 0) {
+      switchSelect.innerHTML = `<option value="">No switches found</option>`;
+      errorEl.textContent = "Warning: No virtual switches found. Please create one first.";
+      errorEl.classList.add("show");
+    } else {
+      switchSelect.innerHTML = switches.map(s =>
+        `<option value="${s.Name}">${s.Name} (${s.SwitchType})</option>`
+      ).join("");
+    }
+
+    // Load ISOs
+    isos = await window.api.getISOs();
+    const isoSelect = document.getElementById("isoPath");
+
+    if (isos.length === 0) {
+      isoSelect.innerHTML = `<option value="">No ISO files found</option>`;
+    } else {
+      isoSelect.innerHTML = `<option value="">No ISO (Empty VM)</option>` +
+        isos.map(iso => {
+          const fileName = iso.FullName.split("\\").pop();
+          const sizeGB = (iso.Length / (1024 ** 3)).toFixed(2);
+          return `<option value="${iso.FullName}">${fileName} (${sizeGB} GB)</option>`;
+        }).join("");
+    }
+
+    modal.classList.add("active");
+  } catch (err) {
+    errorEl.textContent = "Failed to load VM configuration: " + err.message;
+    errorEl.classList.add("show");
+  }
+}
+
+function closeCreateVMModal() {
+  document.getElementById("createVMModal").classList.remove("active");
+}
+
+async function submitCreateVM(event) {
+  event.preventDefault();
+
+  const form = event.target;
+  const formData = new FormData(form);
+  const errorEl = document.getElementById("createError");
+  const submitBtn = document.getElementById("submitBtn");
+
+  const vmConfig = {
+    name: formData.get("vmName").trim(),
+    memoryGB: parseInt(formData.get("memoryGB")),
+    cpuCount: parseInt(formData.get("cpuCount")),
+    diskSizeGB: parseInt(formData.get("diskSizeGB")),
+    switchName: formData.get("switchName"),
+    isoPath: formData.get("isoPath") || null,
+    enableTPM: formData.get("enableTPM") === "on",
+    dynamicMemory: formData.get("dynamicMemory") === "on",
+    enhancedSession: formData.get("enhancedSession") === "on"
+  };
+
+  // Validate
+  if (!vmConfig.name) {
+    errorEl.textContent = "Please enter a VM name";
+    errorEl.classList.add("show");
+    return;
+  }
+
+  if (!vmConfig.switchName) {
+    errorEl.textContent = "Please select a virtual switch";
+    errorEl.classList.add("show");
+    return;
+  }
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Creating...";
+
+  try {
+    const result = await window.api.createVM(vmConfig);
+
+    if (result.success) {
+      closeCreateVMModal();
+      loadVMs();
+    } else {
+      errorEl.textContent = "Failed to create VM: " + (result.error || "Unknown error");
+      errorEl.classList.add("show");
+    }
+  } catch (err) {
+    errorEl.textContent = "Failed to create VM: " + err.message;
+    errorEl.classList.add("show");
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Create VM";
+  }
+}
+
+// Close modal on overlay click
+document.getElementById("createVMModal").addEventListener("click", (e) => {
+  if (e.target.id === "createVMModal") {
+    closeCreateVMModal();
+  }
+});
 
 loadVMs();
 </script>
