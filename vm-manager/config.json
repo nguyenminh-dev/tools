@@ -1,0 +1,15 @@
+{
+  "limits": {
+    "maxVMs": 5,
+    "perVM": {
+      "maxMemoryGB": 16,
+      "maxCPU": 8,
+      "maxDiskGB": 500
+    },
+    "total": {
+      "maxMemoryGB": 32,
+      "maxCPU": 16
+    },
+    "maxRunningVMs": 3
+  }
+}

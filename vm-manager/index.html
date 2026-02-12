@@ -1,0 +1,292 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<title>Hyper-V VM Manager</title>
+
+<style>
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: "Segoe UI", sans-serif;
+  padding: 30px;
+  background: #f3f6fb;
+  color: #333;
+}
+
+h1 {
+  color: #0078d4;
+  margin-bottom: 25px;
+  font-weight: 600;
+}
+
+h2 {
+  margin-bottom: 15px;
+  font-size: 18px;
+}
+
+/* ================= DASHBOARD ================= */
+
+.resource-panel {
+  background: white;
+  padding: 25px;
+  border-radius: 12px;
+  margin-bottom: 30px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+}
+
+.resource-item {
+  margin-bottom: 20px;
+}
+
+.resource-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  margin-bottom: 6px;
+}
+
+.progress-bar {
+  height: 10px;
+  background: #e6eaf0;
+  border-radius: 20px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  transition: width .4s ease;
+  border-radius: 20px;
+}
+
+.low { background: #16a34a; }
+.medium { background: #f59e0b; }
+.high { background: #dc2626; }
+
+/* ================= TOOLBAR ================= */
+
+.toolbar {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 25px;
+}
+
+button {
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all .2s ease;
+}
+
+button:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  opacity: .9;
+}
+
+.btn-refresh { background: #2563eb; color: white; }
+.btn-start { background: #16a34a; color: white; }
+.btn-stop { background: #dc2626; color: white; }
+.btn-delete { background: #7f1d1d; color: white; }
+
+/* ================= GRID ================= */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 20px;
+}
+
+.vm {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+  transition: transform .2s ease;
+}
+
+.vm:hover {
+  transform: translateY(-3px);
+}
+
+.vm h3 {
+  color: #0078d4;
+  margin-bottom: 10px;
+}
+
+.vm p {
+  font-size: 14px;
+  margin-bottom: 6px;
+}
+
+.state.running {
+  color: #16a34a;
+  font-weight: 600;
+}
+
+.state.stopped {
+  color: #dc2626;
+  font-weight: 600;
+}
+
+.vm-actions {
+  margin-top: 12px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.empty-message {
+  grid-column: 1/-1;
+  text-align: center;
+  padding: 50px;
+  color: #999;
+}
+</style>
+</head>
+
+<body>
+
+<h1>Hyper-V VM Manager</h1>
+
+<div class="resource-panel">
+  <h2>Resource Usage</h2>
+
+  <div class="resource-item">
+    <div class="resource-label">
+      <span>Running VMs</span>
+      <span id="runningLabel">0 / 0</span>
+    </div>
+    <div class="progress-bar">
+      <div id="runningBar" class="progress-fill"></div>
+    </div>
+  </div>
+
+  <div class="resource-item">
+    <div class="resource-label">
+      <span>Total CPU (cores)</span>
+      <span id="cpuLabel">0 / 0</span>
+    </div>
+    <div class="progress-bar">
+      <div id="cpuBar" class="progress-fill"></div>
+    </div>
+  </div>
+
+  <div class="resource-item">
+    <div class="resource-label">
+      <span>Total Memory (GB)</span>
+      <span id="memLabel">0 / 0</span>
+    </div>
+    <div class="progress-bar">
+      <div id="memBar" class="progress-fill"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toolbar">
+  <button class="btn-refresh" onclick="loadVMs()">Refresh</button>
+</div>
+
+<h2>Virtual Machines</h2>
+<div class="grid" id="vmGrid"></div>
+
+<script>
+let limits = null;
+
+function setBar(id, used, max) {
+  const percent = max > 0 ? Math.min((used / max) * 100, 100) : 0;
+  const bar = document.getElementById(id + "Bar");
+  bar.style.width = percent + "%";
+  bar.className =
+    "progress-fill " +
+    (percent < 50 ? "low" : percent < 80 ? "medium" : "high");
+}
+
+async function loadVMs() {
+  limits = await window.api.getConfig();
+
+  let raw = await window.api.getVMs();
+  const vms = Array.isArray(raw) ? raw : raw ? [raw] : [];
+
+  const running = vms.filter(vm => vm.State === "Running");
+  const usedCPU = running.reduce((s, vm) => s + (vm.CPU || 0), 0);
+  const usedMem = running.reduce((s, vm) => s + (vm.MemoryGB || 0), 0);
+
+  document.getElementById("runningLabel").textContent =
+    `${running.length} / ${limits.limits.maxRunningVMs}`;
+
+  document.getElementById("cpuLabel").textContent =
+    `${usedCPU} / ${limits.limits.total.maxCPU}`;
+
+  document.getElementById("memLabel").textContent =
+    `${usedMem} / ${limits.limits.total.maxMemoryGB}`;
+
+  setBar("running", running.length, limits.limits.maxRunningVMs);
+  setBar("cpu", usedCPU, limits.limits.total.maxCPU);
+  setBar("mem", usedMem, limits.limits.total.maxMemoryGB);
+
+  const grid = document.getElementById("vmGrid");
+  grid.innerHTML = "";
+
+  if (vms.length === 0) {
+    grid.innerHTML = `<div class="empty-message">No virtual machines found.</div>`;
+    return;
+  }
+
+  vms.forEach(vm => {
+    const stateClass = vm.State === "Running" ? "running" : "stopped";
+
+    const div = document.createElement("div");
+    div.className = "vm";
+    div.innerHTML = `
+      <h3>${vm.Name}</h3>
+      <p class="state ${stateClass}">State: ${vm.State}</p>
+      <p>CPU: ${vm.CPU} cores</p>
+      <p>Memory: ${vm.MemoryGB} GB</p>
+      <div class="vm-actions">
+        <button class="btn-start" onclick="startVM('${vm.Name}')"
+          ${vm.State === "Running" ? "disabled" : ""}>Start</button>
+
+        <button class="btn-stop" onclick="stopVM('${vm.Name}')"
+          ${vm.State !== "Running" ? "disabled" : ""}>Stop</button>
+
+        <button class="btn-delete"
+          onclick="deleteVM('${vm.Name}')">Delete</button>
+      </div>
+    `;
+
+    grid.appendChild(div);
+  });
+}
+
+async function startVM(name) {
+  await window.api.startVM(name);
+  setTimeout(loadVMs, 2000);
+}
+
+async function stopVM(name) {
+  await window.api.stopVM(name);
+  setTimeout(loadVMs, 2000);
+}
+
+async function deleteVM(name) {
+  await window.api.deleteVM(name);
+  loadVMs();
+}
+
+loadVMs();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "name": "vm-manager-tests",
+  "version": "1.0.0",
+  "description": "Test scripts for VM Manager",
+  "scripts": {
+    "test:vms": "node test-get-vms.js",
+    "test:switches": "node test-get-switches.js",
+    "test:host": "node test-host-info.js",
+    "test:all": "npm run test:vms && npm run test:switches && npm run test:host"
+  }
+}
