@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld("api", {
   // Network Management
   getSwitches: () => ipcRenderer.invoke("get-switches"),
   getVMNetworks: () => ipcRenderer.invoke("get-vm-networks"),
+  getVMIP: (vmName) => ipcRenderer.invoke("get-vm-ip", vmName),
   getNetworkAdapters: () => ipcRenderer.invoke("get-network-adapters"),
   createNATSwitch: (config) => ipcRenderer.invoke("create-nat-switch", config),
   createExternalSwitch: (config) => ipcRenderer.invoke("create-external-switch", config),
@@ -28,6 +29,7 @@ contextBridge.exposeInMainWorld("api", {
   removePortRule: (externalPort, protocol) => ipcRenderer.invoke("remove-port-rule", externalPort, protocol),
 
   // Remote Connection
+  vmConnect: (vmName) => ipcRenderer.invoke("vm-connect", vmName),
   connectRDP: (ip, username) => ipcRenderer.invoke("connect-rdp", ip, username),
   getSSHCommand: (ip, username, port) => ipcRenderer.invoke("get-ssh-command", ip, username, port),
 

@@ -324,6 +324,27 @@ ipcMain.handle("get-vm-networks", async () => {
   }
 });
 
+// Get IP address of a specific VM
+ipcMain.handle("get-vm-ip", async (_, vmName) => {
+  try {
+    const result = await execPowerShell(
+      `Get-VM -Name "${vmName}" | Get-VMNetworkAdapter | Select-Object -ExpandProperty IPAddresses | ConvertTo-Json -Compress`
+    );
+    if (!result || result.trim() === "" || result.trim() === "") {
+      return null;
+    }
+    const ips = JSON.parse(result);
+    // Return first IPv4 address, or first IP if no IPv4
+    if (Array.isArray(ips)) {
+      const ipv4 = ips.find(ip => ip.includes("."));
+      return ipv4 || ips[0] || null;
+    }
+    return ips;
+  } catch (error) {
+    return null;
+  }
+});
+
 // Create NAT Switch
 ipcMain.handle("create-nat-switch", async (_, config) => {
   const { name, subnet } = config;
@@ -451,6 +472,18 @@ ipcMain.handle("remove-port-rule", async (_, externalPort, protocol) => {
 });
 
 // ==================== Remote Connection ====================
+
+// Launch VMConnect (Hyper-V Console)
+ipcMain.handle("vm-connect", async (_, vmName) => {
+  try {
+    exec(`vmconnect.exe localhost "${vmName}"`, (error) => {
+      if (error) console.error("VMConnect error:", error);
+    });
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
 
 // Launch RDP connection
 ipcMain.handle("connect-rdp", async (_, ip, username = "") => {
