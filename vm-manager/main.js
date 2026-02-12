@@ -51,15 +51,20 @@ app.on("activate", () => {
 function execPowerShell(command) {
   return new Promise((resolve, reject) => {
 
-    // PowerShell yêu cầu UTF-16LE khi encode
-    const encoded = Buffer.from(command, "utf16le").toString("base64");
+    const wrapped = `
+      $ProgressPreference = 'SilentlyContinue';
+      $WarningPreference = 'SilentlyContinue';
+      $ErrorActionPreference = 'Stop';
+      ${command}
+    `;
+
+    const encoded = Buffer.from(wrapped, "utf16le").toString("base64");
 
     exec(
-      `powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand ${encoded}`,
+      `powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand ${encoded}`,
       { maxBuffer: 1024 * 1024 * 50, windowsHide: true },
       (err, stdout, stderr) => {
         if (err) {
-          console.error("PowerShell Error:", err.message, stderr);
           return reject({ error: err.message, stderr });
         }
         resolve(stdout.trim());
@@ -265,8 +270,12 @@ ipcMain.handle("create-vm", async (_, vmConfig) => {
     }
 
     // Create VM with VHD
+    const vmPath = path.join(__dirname, "vms", name);
+    const vhdPath = path.join(vmPath, `${name}.vhdx`);
+    if (!fs.existsSync(vmPath)) fs.mkdirSync(vmPath, { recursive: true });
+
     await execPowerShell(
-      `New-VM -Name "${name}" -MemoryStartupBytes ${memoryGB}GB -BootDevice VHD -NewVHDPath "C:\\ProgramData\\Microsoft\\Windows\\Hyper-V\\${name}\\${name}.vhdx" -NewVHDSizeBytes ${diskSizeGB}GB -Path "C:\\ProgramData\\Microsoft\\Windows\\Hyper-V\\" -Generation 2 -SwitchName "${switchName}"`
+      `New-VM -Name "${name}" -MemoryStartupBytes ${memoryGB}GB -Generation 2 -NewVHDPath "${vhdPath}" -NewVHDSizeBytes ${diskSizeGB}GB -Path "${vmPath}" -SwitchName "${switchName}"`
     );
 
     // Set CPU and Dynamic Memory
